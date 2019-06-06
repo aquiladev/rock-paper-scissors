@@ -46,11 +46,6 @@ contract RockPaperScissors is Pausable, PullPayment {
         _;
     }
 
-    // modifier onlyPlayer2(uint256 gameId) {
-    //     require(msg.sender != _games[gameId].player2, "Only player2 can execute");
-    //     _;
-    // }
-
     modifier onlyActive(uint256 gameId) {
         require(_games[gameId].state == State.Active, "Game not active");
         _;
