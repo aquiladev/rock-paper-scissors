@@ -5,7 +5,7 @@ const RockPaperScissors = artifacts.require('./RockPaperScissors.sol');
 contract('RockPaperScissors', accounts => {
     let game;
     beforeEach(async () => {
-        game = await RockPaperScissors.new(false);
+        game = await RockPaperScissors.new(false, { from: accounts[0] });
     });
 
     describe('game', function () {
@@ -27,11 +27,12 @@ contract('RockPaperScissors', accounts => {
 
             const { logs: revealLogs } = await game.reveal(id, 1, web3.utils.fromAscii(secret), { from: accounts[0] });
             expectEvent.inLogs(revealLogs, 'LogRevealed');
+            expectEvent.inLogs(revealLogs, 'LogOutcome');
 
-            const result1 = await game.payments(accounts[0]);
+            const result1 = await game.balanceOf(accounts[0]);
             result1.should.be.bignumber.equal('0');
 
-            const result2 = await game.payments(accounts[1]);
+            const result2 = await game.balanceOf(accounts[1]);
             result2.should.be.bignumber.equal('2');
         });
     });

@@ -18,6 +18,7 @@ contract RockPaperScissors is Pausable, PullPayment {
     event LogFirstMoved(address indexed player, uint256 indexed id, bytes32 hashedMove);
     event LogSecondMoved(address indexed player, uint256 indexed id, uint8 move);
     event LogRevealed(address indexed player, uint256 indexed id, uint8 move);
+    event LogOutcome(uint256 indexed id, uint8 outcome, uint256 stake);
 
     struct Game {
         address player1;
@@ -26,6 +27,7 @@ contract RockPaperScissors is Pausable, PullPayment {
         Move move2;
         Move move1;
         uint256 stake;
+        uint256 stepDuration;
         uint256 joinDeadline;
         uint256 move1Deadline;
         uint256 move2Deadline;
@@ -33,7 +35,7 @@ contract RockPaperScissors is Pausable, PullPayment {
         bytes32 hashedMove1;
     }
 
-    uint256 _gameIndex = 0;
+    uint256 private _gameIndex;
     mapping (uint256 => Game) public _games;
 
     modifier exist(uint256 gameId) {
@@ -58,22 +60,16 @@ contract RockPaperScissors is Pausable, PullPayment {
         return keccak256(abi.encodePacked(address(this), gameId, Move(move), secret));
     }
 
-    function start(uint256 maxMoveDuration) public payable returns(uint256 gameId) {
-        require(maxMoveDuration > 0, "Move duration cannot be zero");
+    function start(uint256 maxStepDuration) public payable returns(uint256 gameId) {
+        require(maxStepDuration > 0, "Step duration cannot be zero");
 
-        _games[_gameIndex] = Game(
-            msg.sender,
-            State.WaitForPlayer,
-            address(0),
-            Move.None,
-            Move.None,
-            msg.value,
-            block.number.add(maxMoveDuration),
-            maxMoveDuration,
-            maxMoveDuration,
-            maxMoveDuration,
-            0
-        );
+        Game storage current = _games[_gameIndex];
+        current.player1 = msg.sender;
+        current.state = State.WaitForPlayer;
+        current.stake = msg.value;
+        current.stepDuration = maxStepDuration;
+        current.joinDeadline = block.number.add(maxStepDuration);
+
         gameId = _gameIndex;
         _gameIndex += 1;
 
@@ -101,7 +97,7 @@ contract RockPaperScissors is Pausable, PullPayment {
         current.player2 = msg.sender;
         current.state = State.Active;
         current.stake = current.stake.add(msg.value);
-        current.move1Deadline = block.number.add(current.move1Deadline);
+        current.move1Deadline = block.number.add(current.stepDuration);
 
         emit LogJoined(msg.sender, gameId);
     }
@@ -114,7 +110,7 @@ contract RockPaperScissors is Pausable, PullPayment {
         require(block.number <= current.move1Deadline, "First move deadline reached");
 
         current.hashedMove1 = hashedMove;
-        current.move2Deadline = block.number.add(current.move2Deadline);
+        current.move2Deadline = block.number.add(current.stepDuration);
 
         emit LogFirstMoved(msg.sender, gameId, hashedMove);
     }
@@ -128,7 +124,7 @@ contract RockPaperScissors is Pausable, PullPayment {
         require(block.number <= current.move2Deadline, "Second move deadline reached");
 
         current.move2 = Move(move);
-        current.revealDeadline = block.number.add(current.revealDeadline);
+        current.revealDeadline = block.number.add(current.stepDuration);
 
         emit LogSecondMoved(msg.sender, gameId, move);
     }
@@ -164,6 +160,8 @@ contract RockPaperScissors is Pausable, PullPayment {
                 revert("Something went wrong");
             }
         }
+
+        emit LogOutcome(gameId, outcome, stake);
 
         return outcome;
     }

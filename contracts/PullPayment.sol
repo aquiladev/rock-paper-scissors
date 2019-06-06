@@ -7,17 +7,18 @@ contract PullPayment {
 
     event LogWithdrawn(address indexed who, uint amount);
 
-    mapping(address => uint256) public payments;
-    uint256 public totalPayments;
+    mapping(address => uint256) private payments;
 
     function transferTo(address to, uint256 amount) internal {
         payments[to] = payments[to].add(amount);
-        totalPayments = totalPayments.add(amount);
     }
 
     function transferFrom(address from, uint256 amount) internal {
         payments[from] = payments[from].sub(amount);
-        totalPayments = totalPayments.sub(amount);
+    }
+
+    function balanceOf(address account) public view returns(uint256) {
+        return payments[account];
     }
 
     function withdraw() public {
@@ -25,7 +26,6 @@ contract PullPayment {
         require(payment != 0, "Balance is empty");
 
         assert(payment <= address(this).balance);
-        totalPayments = totalPayments.sub(payment);
         payments[msg.sender] = 0;
 
         emit LogWithdrawn(msg.sender, payment);
