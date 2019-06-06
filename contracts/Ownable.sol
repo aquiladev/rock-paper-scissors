@@ -22,4 +22,11 @@ contract Ownable {
     function isOwner() public view returns (bool) {
         return msg.sender == _owner;
     }
+
+    function changeOwner(address newOwner) public onlyOwner {
+        require(newOwner != address(0), "new owner is the zero address");
+
+        _owner = newOwner;
+        emit LogOwnerChanged(_owner, newOwner);
+    }
 }
