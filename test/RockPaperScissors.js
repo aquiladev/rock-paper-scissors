@@ -3,6 +3,26 @@ const { BN, expectRevert, expectEvent } = require('openzeppelin-test-helpers');
 const RockPaperScissors = artifacts.require('./RockPaperScissors.sol');
 
 contract('RockPaperScissors', accounts => {
+    const initGameState = {
+        player1: '0x0000000000000000000000000000000000000000',
+        player2: '0x0000000000000000000000000000000000000000',
+        stake: new BN('0'),
+        state: new BN('0'),
+        move1: new BN('0'),
+        move2: new BN('0'),
+        stepDuration: new BN('0'),
+        nextDeadline: new BN('0'),
+        hashedMove1: '0x0000000000000000000000000000000000000000000000000000000000000000'
+    };
+    const defaultStake = new BN('10');
+    const defaultStepDuration = new BN('10');
+    const states = {
+        Init: new BN('0'),
+        WaitForPlayer: new BN('1'),
+        Active: new BN('2'),
+        Finished: new BN('3')
+    };
+
     let game;
     beforeEach(async () => {
         game = await RockPaperScissors.new(false, { from: accounts[0] });
@@ -37,42 +57,65 @@ contract('RockPaperScissors', accounts => {
         });
     });
 
+    assertGame = (expected, actual) => {
+        actual[0].should.be.equal(expected.player1, "player1");
+        actual[1].should.be.equal(expected.player2, "player2");
+        actual[2].should.be.bignumber.equal(expected.stake, "stake");
+        actual[3].should.be.bignumber.equal(expected.state, "state");
+        actual[4].should.be.bignumber.equal(expected.move1, "move1");
+        actual[5].should.be.bignumber.equal(expected.move2, "move2");
+        actual[6].should.be.bignumber.equal(expected.stepDuration, "stepDuration");
+        // actual[7].should.be.bignumber.equal(expected.nextDeadline, "nextDeadline");
+        actual[8].should.be.equal(expected.hashedMove1, "hashedMove1");
+    }
+
     describe('start', () => {
         it('revert when step duration is zero', async () => {
             await expectRevert(game.start(0, { value: 0, from: accounts[0] }), 'Step duration cannot be zero');
         })
 
         it('start game', async () => {
-            const { logs } = await game.start(10, { value: 10, from: accounts[0] });
+            const { logs } = await game.start(defaultStepDuration, { value: defaultStake, from: accounts[0] });
             expectEvent.inLogs(logs, 'LogStarted', {
                 owner: accounts[0],
                 id: new BN('0'),
-                stake: new BN('10')
+                stake: defaultStake
             });
+
+            const state = await game.getGame(0);
+            const expected = {
+                ...initGameState, ...{
+                    player1: accounts[0],
+                    stake: defaultStake,
+                    state: states.WaitForPlayer,
+                    stepDuration: defaultStepDuration
+                }
+            };
+            assertGame(expected, state);
         })
 
         it('start multiple games', async () => {
-            const { logs: game1Logs } = await game.start(10, { value: 10, from: accounts[0] });
+            const { logs: game1Logs } = await game.start(defaultStepDuration, { value: defaultStake, from: accounts[0] });
             expectEvent.inLogs(game1Logs, 'LogStarted', {
                 owner: accounts[0],
                 id: new BN('0'),
-                stake: new BN('10')
+                stake: defaultStake
             });
 
-            const { logs: game2Logs } = await game.start(10, { value: 10, from: accounts[0] });
+            const { logs: game2Logs } = await game.start(defaultStepDuration, { value: defaultStake, from: accounts[0] });
             expectEvent.inLogs(game2Logs, 'LogStarted', {
                 owner: accounts[0],
                 id: new BN('1'),
-                stake: new BN('10')
+                stake: defaultStake
             });
         })
 
         it('start multiple games by diff accounts', async () => {
-            const { logs: game1Logs } = await game.start(10, { value: 10, from: accounts[0] });
+            const { logs: game1Logs } = await game.start(defaultStepDuration, { value: defaultStake, from: accounts[0] });
             expectEvent.inLogs(game1Logs, 'LogStarted', {
                 owner: accounts[0],
                 id: new BN('0'),
-                stake: new BN('10')
+                stake: defaultStake
             });
 
             const { logs: game2Logs } = await game.start(1, { value: 100, from: accounts[1] });
@@ -97,7 +140,7 @@ contract('RockPaperScissors', accounts => {
         })
 
         it('decline unstarted game', async () => {
-            const { logs: startLogs } = await game.start(10, { value: 1, from: accounts[0] });
+            const { logs: startLogs } = await game.start(defaultStepDuration, { value: 1, from: accounts[0] });
 
             const { id } = startLogs[0].args;
             const { logs: declineLogs } = await game.decline(id, { from: accounts[0] });
@@ -108,6 +151,14 @@ contract('RockPaperScissors', accounts => {
 
             const balance = await game.balanceOf(accounts[0]);
             balance.should.be.bignumber.equal('1');
+
+            const state = await game.getGame(id);
+            const expected = {
+                ...initGameState, ...{
+                    state: states.Finished
+                }
+            };
+            assertGame(expected, state);
         })
     });
 
@@ -141,14 +192,26 @@ contract('RockPaperScissors', accounts => {
         })
 
         it('join game', async () => {
-            const { logs: startLogs } = await game.start(10, { value: 1, from: accounts[0] });
+            const { logs: startLogs } = await game.start(defaultStepDuration, { value: defaultStake, from: accounts[0] });
 
             const { id } = startLogs[0].args;
-            const { logs: joinLogs } = await game.join(id, { value: 1, from: accounts[1] });
+            const { logs: joinLogs } = await game.join(id, { value: defaultStake, from: accounts[1] });
             expectEvent.inLogs(joinLogs, 'LogJoined', {
                 player: accounts[1],
                 id: new BN('0')
             });
+
+            const state = await game.getGame(id);
+            const expected = {
+                ...initGameState, ...{
+                    player1:  accounts[0],
+                    player2: accounts[1],
+                    state: states.Active,
+                    stake: new BN('20'),
+                    stepDuration: defaultStepDuration
+                }
+            };
+            assertGame(expected, state);
         })
     });
 
@@ -205,10 +268,10 @@ contract('RockPaperScissors', accounts => {
         })
 
         it('move1', async () => {
-            const { logs: startLogs } = await game.start(1, { value: 1, from: accounts[0] });
+            const { logs: startLogs } = await game.start(defaultStepDuration, { value: defaultStake, from: accounts[0] });
 
             const { id } = startLogs[0].args;
-            await game.join(id, { value: 1, from: accounts[1] });
+            await game.join(id, { value: defaultStake, from: accounts[1] });
 
             const hashedMove = '0x1000000000000000000000000000000000000000000000000000000000000000';
             const { logs: move1Logs } = await game.move1(id, hashedMove, { from: accounts[0] });
@@ -217,6 +280,19 @@ contract('RockPaperScissors', accounts => {
                 id: new BN('0'),
                 hashedMove
             });
+
+            const state = await game.getGame(id);
+            const expected = {
+                ...initGameState, ...{
+                    player1:  accounts[0],
+                    player2: accounts[1],
+                    state: states.Active,
+                    stake: new BN('20'),
+                    stepDuration: defaultStepDuration,
+                    hashedMove1: hashedMove
+                }
+            };
+            assertGame(expected, state);
         })
     });
 
@@ -286,18 +362,34 @@ contract('RockPaperScissors', accounts => {
         })
 
         it('move2', async () => {
-            const { logs: startLogs } = await game.start(1, { value: 1, from: accounts[0] });
+            const { logs: startLogs } = await game.start(defaultStepDuration, { value: defaultStake, from: accounts[0] });
 
             const { id } = startLogs[0].args;
-            await game.join(id, { value: 1, from: accounts[1] });
-            await game.move1(id, web3.utils.fromAscii('0'), { from: accounts[0] });
+            await game.join(id, { value: defaultStake, from: accounts[1] });
+            const hashedMove = '0x1000000000000000000000000000000000000000000000000000000000000000';
+            await game.move1(id, hashedMove, { from: accounts[0] });
 
-            const { logs: move2Logs } = await game.move2(id, 1, { from: accounts[1] });
+            const move = new BN('1');
+            const { logs: move2Logs } = await game.move2(id, move, { from: accounts[1] });
             expectEvent.inLogs(move2Logs, 'LogSecondMoved', {
                 player: accounts[1],
                 id: new BN('0'),
-                move: new BN('1')
+                move
             });
+
+            const state = await game.getGame(id);
+            const expected = {
+                ...initGameState, ...{
+                    player1:  accounts[0],
+                    player2: accounts[1],
+                    state: states.Active,
+                    stake: new BN('20'),
+                    move2: move,
+                    stepDuration: defaultStepDuration,
+                    hashedMove1: hashedMove
+                }
+            };
+            assertGame(expected, state);
         })
     });
 
@@ -357,14 +449,14 @@ contract('RockPaperScissors', accounts => {
         })
 
         it('reveal move', async () => {
-            const { logs: startLogs } = await game.start(1, { value: 1, from: accounts[0] });
+            const { logs: startLogs } = await game.start(defaultStepDuration, { value: defaultStake, from: accounts[0] });
 
             const { id } = startLogs[0].args;
             const firstMove = 1;
             const secret = 'super secure pwd';
             const hashedMove = await game.generateMoveHash(id, firstMove, web3.utils.fromAscii(secret));
 
-            await game.join(id, { value: 1, from: accounts[1] });
+            await game.join(id, { value: defaultStake, from: accounts[1] });
             await game.move1(id, hashedMove, { from: accounts[0] });
             await game.move2(id, 1, { from: accounts[1] });
 
@@ -377,14 +469,22 @@ contract('RockPaperScissors', accounts => {
             expectEvent.inLogs(revealLogs, 'LogOutcome', {
                 id: new BN('0'),
                 outcome: new BN('3'),
-                stake: new BN('2')
+                stake: new BN('20')
             });
 
             const balance1 = await game.balanceOf(accounts[0]);
-            balance1.should.be.bignumber.equal('1');
+            balance1.should.be.bignumber.equal(defaultStake);
 
             const balance2 = await game.balanceOf(accounts[1]);
-            balance2.should.be.bignumber.equal('1');
+            balance2.should.be.bignumber.equal(defaultStake);
+
+            const state = await game.getGame(id);
+            const expected = {
+                ...initGameState, ...{
+                    state: states.Finished
+                }
+            };
+            assertGame(expected, state);
         })
     });
 
@@ -452,6 +552,14 @@ contract('RockPaperScissors', accounts => {
                 outcome: new BN('2'),
                 stake: new BN('2')
             });
+
+            const state = await game.getGame(id);
+            const expected = {
+                ...initGameState, ...{
+                    state: states.Finished
+                }
+            };
+            assertGame(expected, state);
         })
     });
 });
