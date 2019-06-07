@@ -19,6 +19,7 @@ contract RockPaperScissors is Pausable, PullPayment {
     event LogSecondMoved(address indexed player, uint256 indexed id, uint8 move);
     event LogRevealed(address indexed player, uint256 indexed id, uint8 move);
     event LogOutcome(uint256 indexed id, uint8 outcome, uint256 stake);
+    event LogClaimed(uint256 indexed id, uint8 outcome, uint256 stake);
 
     struct Game {
         address player1;
@@ -36,7 +37,7 @@ contract RockPaperScissors is Pausable, PullPayment {
     }
 
     uint256 private _gameIndex;
-    mapping (uint256 => Game) public _games;
+    mapping (uint256 => Game) private _games;
 
     modifier exist(uint256 gameId) {
         require(_games[gameId].player1 != address(0), "Game not exist");
@@ -103,9 +104,10 @@ contract RockPaperScissors is Pausable, PullPayment {
     }
 
     function move1(uint256 gameId, bytes32 hashedMove) public exist(gameId) onlyPlayer1(gameId) onlyActive(gameId) {
+        require(hashedMove != 0, "Hashed move cannot be empty");
+
         Game storage current = _games[gameId];
 
-        require(hashedMove != 0, "Hashed move cannot be empty");
         require(current.hashedMove1 == 0, "Cannot move twice");
         require(block.number <= current.move1Deadline, "First move deadline reached");
 
@@ -116,6 +118,8 @@ contract RockPaperScissors is Pausable, PullPayment {
     }
 
     function move2(uint256 gameId, uint8 move) public exist(gameId) onlyActive(gameId) {
+        require(move != 0, "Move cannot be empty");
+
         Game storage current = _games[gameId];
 
         require(msg.sender == current.player2, "Only player2 can execute");
@@ -146,22 +150,40 @@ contract RockPaperScissors is Pausable, PullPayment {
         address player2 = current.player2;
 
         cleanUp(current);
+        settle(outcome, stake, msg.sender, player2);
 
-        if (stake > 0) {
-            if (outcome == Outcome.Draw) {
-                uint256 half = stake.div(2);
-                transferTo(msg.sender, half);
-                transferTo(player2, half);
-            } else if (outcome == Outcome.Win1) {
-                transferTo(msg.sender, stake);
-            } else if (outcome == Outcome.Win2) {
-                transferTo(player2, stake);
-            } else {
-                revert("Something went wrong");
-            }
+        emit LogOutcome(gameId, uint8(outcome), stake);
+
+        return outcome;
+    }
+
+    function claim(uint256 gameId) public exist(gameId) onlyActive(gameId) returns (Outcome) {
+        Game storage current = _games[gameId];
+
+        Outcome outcome = Outcome.None;
+
+        if(current.move1 == Move.None && block.number > current.revealDeadline) {
+            outcome = Outcome.Win2;
         }
 
-        emit LogOutcome(gameId, outcome, stake);
+        if(current.move2 == Move.None && block.number > current.move2Deadline) {
+            outcome = Outcome.Win1;
+        }
+
+        if(current.hashedMove1 == 0 && block.number > current.move1Deadline) {
+            outcome = Outcome.Win2;
+        }
+
+        require(outcome != Outcome.None, "Game still active");
+
+        uint stake = current.stake;
+        address player1 = current.player1;
+        address player2 = current.player2;
+
+        cleanUp(current);
+        settle(outcome, stake, player1, player2);
+
+        emit LogClaimed(gameId, uint8(outcome), stake);
 
         return outcome;
     }
@@ -189,5 +211,21 @@ contract RockPaperScissors is Pausable, PullPayment {
         if (move1 < move2) return Outcome.Win2;
         if (m1 == Move.Scissors && m2 == Move.Rock) return Outcome.Win2;
         return Outcome.Win1;
+    }
+
+    function settle(Outcome outcome, uint stake, address player1, address player2) private {
+        if (stake > 0) {
+            if (outcome == Outcome.Draw) {
+                uint256 half = stake.div(2);
+                transferTo(player1, half);
+                transferTo(player2, half);
+            } else if (outcome == Outcome.Win1) {
+                transferTo(player1, stake);
+            } else if (outcome == Outcome.Win2) {
+                transferTo(player2, stake);
+            } else {
+                revert("Something went wrong");
+            }
+        }
     }
 }
