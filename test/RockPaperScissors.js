@@ -77,7 +77,7 @@ contract('RockPaperScissors', accounts => {
         it('start game', async () => {
             const { logs } = await game.start(defaultStepDuration, { value: defaultStake, from: accounts[0] });
             expectEvent.inLogs(logs, 'LogStarted', {
-                owner: accounts[0],
+                player1: accounts[0],
                 id: new BN('0'),
                 stake: defaultStake
             });
@@ -97,14 +97,14 @@ contract('RockPaperScissors', accounts => {
         it('start multiple games', async () => {
             const { logs: game1Logs } = await game.start(defaultStepDuration, { value: defaultStake, from: accounts[0] });
             expectEvent.inLogs(game1Logs, 'LogStarted', {
-                owner: accounts[0],
+                player1: accounts[0],
                 id: new BN('0'),
                 stake: defaultStake
             });
 
             const { logs: game2Logs } = await game.start(defaultStepDuration, { value: defaultStake, from: accounts[0] });
             expectEvent.inLogs(game2Logs, 'LogStarted', {
-                owner: accounts[0],
+                player1: accounts[0],
                 id: new BN('1'),
                 stake: defaultStake
             });
@@ -113,14 +113,14 @@ contract('RockPaperScissors', accounts => {
         it('start multiple games by diff accounts', async () => {
             const { logs: game1Logs } = await game.start(defaultStepDuration, { value: defaultStake, from: accounts[0] });
             expectEvent.inLogs(game1Logs, 'LogStarted', {
-                owner: accounts[0],
+                player1: accounts[0],
                 id: new BN('0'),
                 stake: defaultStake
             });
 
             const { logs: game2Logs } = await game.start(1, { value: 100, from: accounts[1] });
             expectEvent.inLogs(game2Logs, 'LogStarted', {
-                owner: accounts[1],
+                player1: accounts[1],
                 id: new BN('1'),
                 stake: new BN('100')
             });
@@ -145,7 +145,7 @@ contract('RockPaperScissors', accounts => {
             const { id } = startLogs[0].args;
             const { logs: declineLogs } = await game.decline(id, { from: accounts[0] });
             expectEvent.inLogs(declineLogs, 'LogDeclined', {
-                owner: accounts[0],
+                player1: accounts[0],
                 id: new BN('0')
             });
 
@@ -197,7 +197,7 @@ contract('RockPaperScissors', accounts => {
             const { id } = startLogs[0].args;
             const { logs: joinLogs } = await game.join(id, { value: defaultStake, from: accounts[1] });
             expectEvent.inLogs(joinLogs, 'LogJoined', {
-                player: accounts[1],
+                player2: accounts[1],
                 id: new BN('0')
             });
 
@@ -276,7 +276,7 @@ contract('RockPaperScissors', accounts => {
             const hashedMove = '0x1000000000000000000000000000000000000000000000000000000000000000';
             const { logs: move1Logs } = await game.move1(id, hashedMove, { from: accounts[0] });
             expectEvent.inLogs(move1Logs, 'LogFirstMoved', {
-                player: accounts[0],
+                player1: accounts[0],
                 id: new BN('0'),
                 hashedMove
             });
@@ -284,7 +284,7 @@ contract('RockPaperScissors', accounts => {
             const state = await game.getGame(id);
             const expected = {
                 ...initGameState, ...{
-                    player1:  accounts[0],
+                    player1: accounts[0],
                     player2: accounts[1],
                     state: states.Active,
                     stake: new BN('20'),
@@ -372,7 +372,7 @@ contract('RockPaperScissors', accounts => {
             const move = new BN('1');
             const { logs: move2Logs } = await game.move2(id, move, { from: accounts[1] });
             expectEvent.inLogs(move2Logs, 'LogSecondMoved', {
-                player: accounts[1],
+                player2: accounts[1],
                 id: new BN('0'),
                 move
             });
@@ -462,7 +462,7 @@ contract('RockPaperScissors', accounts => {
 
             const { logs: revealLogs } = await game.reveal(id, firstMove, web3.utils.fromAscii(secret), { from: accounts[0] });
             expectEvent.inLogs(revealLogs, 'LogRevealed', {
-                player: accounts[0],
+                player1: accounts[0],
                 id: new BN('0'),
                 move: new BN('1')
             });

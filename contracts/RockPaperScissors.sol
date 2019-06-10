@@ -12,14 +12,14 @@ contract RockPaperScissors is Pausable, PullPayment {
     enum State { Init, WaitForPlayer, Active, Finished }
     enum Outcome { None, Win1, Win2, Draw }
 
-    event LogStarted(address indexed owner, uint256 indexed id, uint256 stake);
-    event LogDeclined(address indexed owner, uint256 indexed id);
-    event LogJoined(address indexed player, uint256 indexed id);
-    event LogFirstMoved(address indexed player, uint256 indexed id, bytes32 hashedMove);
-    event LogSecondMoved(address indexed player, uint256 indexed id, uint8 move);
-    event LogRevealed(address indexed player, uint256 indexed id, uint8 move);
-    event LogOutcome(uint256 indexed id, uint8 outcome, uint256 stake);
-    event LogClaimed(uint256 indexed id, uint8 outcome, uint256 stake);
+    event LogStarted(uint256 indexed id, address indexed player1, uint256 stake);
+    event LogDeclined(uint256 indexed id, address indexed player1);
+    event LogJoined(uint256 indexed id, address indexed player2);
+    event LogFirstMoved(uint256 indexed id, address indexed player1, bytes32 hashedMove);
+    event LogSecondMoved(uint256 indexed id, address indexed player2, Move move);
+    event LogRevealed(uint256 indexed id, address indexed player1, Move move);
+    event LogOutcome(uint256 indexed id, Outcome outcome, uint256 stake);
+    event LogClaimed(uint256 indexed id, Outcome outcome, uint256 stake);
 
     struct Game {
         address player1;
@@ -54,14 +54,32 @@ contract RockPaperScissors is Pausable, PullPayment {
     constructor (bool paused) public Pausable(paused) {
     }
 
-    function getGame(uint256 gameId) public view returns(address, address, uint256, uint8, uint8, uint8, uint256, uint256, bytes32) {
+    function getGame(uint256 gameId) public view returns(
+        address player1,
+        address player2,
+        uint256 stake,
+        State state,
+        Move move1,
+        Move move2,
+        uint256 stepDuration,
+        uint256 nextDeadline,
+        bytes32 hashedMove1) {
         Game storage game = _games[gameId];
 
-        return (game.player1, game.player2, game.stake, uint8(game.state), uint8(game.move1), uint8(game.move2), game.stepDuration, game.nextDeadline, game.hashedMove1);
+        player1 = game.player1;
+        player2 = game.player2;
+        stake = game.stake;
+        state = game.state;
+        move1 = game.move1;
+        move2 = game.move2;
+        stepDuration = game.stepDuration;
+        nextDeadline = game.nextDeadline;
+        hashedMove1 = game.hashedMove1;
     }
 
-    function generateMoveHash(uint256 gameId, uint8 move, bytes32 secret) public view exist(gameId) returns(bytes32) {
-        return keccak256(abi.encodePacked(address(this), gameId, Move(move), secret));
+    function generateMoveHash(uint256 gameId, Move move, bytes32 secret) public view exist(gameId) returns(bytes32) {
+        require(move != Move.None, "Move cannot be empty");
+        return keccak256(abi.encodePacked(address(this), gameId, move, secret));
     }
 
     function start(uint256 maxStepDuration) public payable returns(uint256 gameId) {
@@ -77,7 +95,7 @@ contract RockPaperScissors is Pausable, PullPayment {
         gameId = _gameIndex;
         _gameIndex += 1;
 
-        emit LogStarted(msg.sender, gameId, msg.value);
+        emit LogStarted(gameId, msg.sender, msg.value);
     }
 
     function decline(uint256 gameId) public exist(gameId) onlyPlayer1(gameId) {
@@ -87,7 +105,7 @@ contract RockPaperScissors is Pausable, PullPayment {
         transferTo(msg.sender, current.stake);
         cleanUp(current);
 
-        emit LogDeclined(msg.sender, gameId);
+        emit LogDeclined(gameId, msg.sender);
     }
 
     function join(uint256 gameId) public payable exist(gameId) {
@@ -103,7 +121,7 @@ contract RockPaperScissors is Pausable, PullPayment {
         current.stake = current.stake.add(msg.value);
         current.nextDeadline = block.number.add(current.stepDuration);
 
-        emit LogJoined(msg.sender, gameId);
+        emit LogJoined(gameId, msg.sender);
     }
 
     function move1(uint256 gameId, bytes32 hashedMove) public exist(gameId) onlyPlayer1(gameId) onlyActive(gameId) {
@@ -117,11 +135,11 @@ contract RockPaperScissors is Pausable, PullPayment {
         current.hashedMove1 = hashedMove;
         current.nextDeadline = block.number.add(current.stepDuration);
 
-        emit LogFirstMoved(msg.sender, gameId, hashedMove);
+        emit LogFirstMoved(gameId, msg.sender, hashedMove);
     }
 
-    function move2(uint256 gameId, uint8 move) public exist(gameId) onlyActive(gameId) {
-        require(move != 0, "Move cannot be empty");
+    function move2(uint256 gameId, Move move) public exist(gameId) onlyActive(gameId) {
+        require(move != Move.None, "Move cannot be empty");
 
         Game storage current = _games[gameId];
 
@@ -130,13 +148,13 @@ contract RockPaperScissors is Pausable, PullPayment {
         require(current.move2 == Move.None, "Cannot move twice");
         require(block.number <= current.nextDeadline, "Second move deadline reached");
 
-        current.move2 = Move(move);
+        current.move2 = move;
         current.nextDeadline = block.number.add(current.stepDuration);
 
-        emit LogSecondMoved(msg.sender, gameId, move);
+        emit LogSecondMoved(gameId, msg.sender, move);
     }
 
-    function reveal(uint256 gameId, uint8 move, bytes32 secret) public exist(gameId) onlyPlayer1(gameId) onlyActive(gameId) returns (Outcome) {
+    function reveal(uint256 gameId, Move move, bytes32 secret) public exist(gameId) onlyPlayer1(gameId) onlyActive(gameId) returns (Outcome) {
         Game storage current = _games[gameId];
 
         require(current.move2 != Move.None, "Reveal should be after second move");
@@ -144,15 +162,15 @@ contract RockPaperScissors is Pausable, PullPayment {
         require(block.number <= current.nextDeadline, "Reveal deadline reached");
         require(generateMoveHash(gameId, move, secret) == current.hashedMove1, "Move does not match");
 
-        current.move1 = Move(move);
+        current.move1 = move;
 
-        emit LogRevealed(msg.sender, gameId, move);
+        emit LogRevealed(gameId, msg.sender, move);
 
-        Outcome outcome = getOutcome(move, uint8(current.move2));
+        Outcome outcome = getOutcome(move, current.move2);
         uint stake = current.stake;
         settle(outcome, current);
 
-        emit LogOutcome(gameId, uint8(outcome), stake);
+        emit LogOutcome(gameId, outcome, stake);
 
         return outcome;
     }
@@ -160,17 +178,19 @@ contract RockPaperScissors is Pausable, PullPayment {
     function claim(uint256 gameId) public exist(gameId) onlyActive(gameId) returns (Outcome) {
         Game storage current = _games[gameId];
 
+        require(block.number > current.nextDeadline, "Game still active");
+
         Outcome outcome;
 
-        if(current.move1 == Move.None && block.number > current.nextDeadline) {
+        if(current.move1 == Move.None) {
             outcome = Outcome.Win2;
         }
 
-        if(current.move2 == Move.None && block.number > current.nextDeadline) {
+        if(current.move2 == Move.None) {
             outcome = Outcome.Win1;
         }
 
-        if(current.hashedMove1 == 0 && block.number > current.nextDeadline) {
+        if(current.hashedMove1 == 0) {
             outcome = Outcome.Win2;
         }
 
@@ -179,7 +199,7 @@ contract RockPaperScissors is Pausable, PullPayment {
         uint stake = current.stake;
         settle(outcome, current);
 
-        emit LogClaimed(gameId, uint8(outcome), stake);
+        emit LogClaimed(gameId, outcome, stake);
 
         return outcome;
     }
@@ -196,14 +216,12 @@ contract RockPaperScissors is Pausable, PullPayment {
         game.hashedMove1 = 0;
     }
 
-    function getOutcome(uint8 move1, uint8 move2) public pure returns(Outcome) {
-        Move m1 = Move(move1);
-        Move m2 = Move(move2);
-        if (m1 == Move.None || m2 == Move.None) return Outcome.None;
-        if (m1 == m2) return Outcome.Draw;
-        if (m1 == Move.Rock && m2 == Move.Scissors) return Outcome.Win1;
+    function getOutcome(Move move1, Move move2) public pure returns(Outcome) {
+        if (move1 == Move.None || move2 == Move.None) return Outcome.None;
+        if (move1 == move2) return Outcome.Draw;
+        if (move1 == Move.Rock && move2 == Move.Scissors) return Outcome.Win1;
         if (move1 < move2) return Outcome.Win2;
-        if (m1 == Move.Scissors && m2 == Move.Rock) return Outcome.Win2;
+        if (move1 == Move.Scissors && move2 == Move.Rock) return Outcome.Win2;
         return Outcome.Win1;
     }
 
