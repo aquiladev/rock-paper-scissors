@@ -1,4 +1,4 @@
-const { BN, expectRevert, expectEvent } = require('openzeppelin-test-helpers');
+const { BN, expectRevert, expectEvent, constants } = require('openzeppelin-test-helpers');
 
 const RockPaperScissors = artifacts.require('./RockPaperScissors.sol');
 
@@ -74,6 +74,10 @@ contract('RockPaperScissors', accounts => {
             await expectRevert(game.start(0, { value: 0, from: accounts[0] }), 'Step duration cannot be zero');
         })
 
+        it('reverts when step duration overflows', async ()=> {
+            await expectRevert.unspecified(game.start(constants.MAX_UINT256, { value: 0, from: accounts[0] }));
+        })
+
         it('start game', async () => {
             const { logs } = await game.start(defaultStepDuration, { value: defaultStake, from: accounts[0] });
             expectEvent.inLogs(logs, 'LogStarted', {
@@ -128,10 +132,6 @@ contract('RockPaperScissors', accounts => {
     });
 
     describe('decline', () => {
-        it('reverts when decline non-existing game', async () => {
-            await expectRevert(game.decline(1, { from: accounts[0] }), 'Game not exist');
-        })
-
         it('reverts when decline not game owner', async () => {
             const { logs: startLogs } = await game.start(10, { value: 1, from: accounts[0] });
 
@@ -163,10 +163,6 @@ contract('RockPaperScissors', accounts => {
     });
 
     describe('join', () => {
-        it('reverts when join non-existing game', async () => {
-            await expectRevert(game.join(1, { from: accounts[0] }), 'Game not exist');
-        })
-
         it('reverts when join game owner', async () => {
             const { logs: startLogs } = await game.start(10, { value: 1, from: accounts[0] });
 
@@ -216,10 +212,6 @@ contract('RockPaperScissors', accounts => {
     });
 
     describe('move1', () => {
-        it('reverts when call move1 of non-existing game', async () => {
-            await expectRevert(game.move1(1, web3.utils.fromAscii('0'), { from: accounts[0] }), 'Game not exist');
-        })
-
         it('reverts when call move1 non-active game', async () => {
             const { logs: startLogs } = await game.start(1, { value: 1, from: accounts[0] });
 
@@ -297,10 +289,6 @@ contract('RockPaperScissors', accounts => {
     });
 
     describe('move2', () => {
-        it('reverts when call move2 of non-existing game', async () => {
-            await expectRevert(game.move2(1, 0, { from: accounts[0] }), 'Game not exist');
-        })
-
         it('reverts when call move2 non-active game', async () => {
             const { logs: startLogs } = await game.start(1, { value: 1, from: accounts[0] });
 
@@ -394,10 +382,6 @@ contract('RockPaperScissors', accounts => {
     });
 
     describe('reveal', () => {
-        it('reverts when call reveal of non-existing game', async () => {
-            await expectRevert(game.reveal(1, 0, web3.utils.fromAscii('0'), { from: accounts[0] }), 'Game not exist');
-        })
-
         it('reverts when call reveal non-active game', async () => {
             const { logs: startLogs } = await game.start(1, { value: 1, from: accounts[0] });
 
@@ -489,10 +473,6 @@ contract('RockPaperScissors', accounts => {
     });
 
     describe('claim', () => {
-        it('reverts when call claim of non-existing game', async () => {
-            await expectRevert(game.claim(1, { from: accounts[0] }), 'Game not exist');
-        })
-
         it('reverts when call claim non-active game', async () => {
             const { logs: startLogs } = await game.start(1, { value: 1, from: accounts[0] });
 

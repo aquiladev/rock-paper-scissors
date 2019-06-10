@@ -98,7 +98,7 @@ contract RockPaperScissors is Pausable, PullPayment {
         emit LogStarted(gameId, msg.sender, msg.value);
     }
 
-    function decline(uint256 gameId) public exist(gameId) onlyPlayer1(gameId) {
+    function decline(uint256 gameId) public onlyPlayer1(gameId) {
         Game storage current = _games[gameId];
         require(current.state == State.WaitForPlayer, "Only not statred game can be declined");
 
@@ -108,7 +108,7 @@ contract RockPaperScissors is Pausable, PullPayment {
         emit LogDeclined(gameId, msg.sender);
     }
 
-    function join(uint256 gameId) public payable exist(gameId) {
+    function join(uint256 gameId) public payable {
         Game storage current = _games[gameId];
 
         require(msg.sender != current.player1, "You can't play with yourself");
@@ -124,7 +124,7 @@ contract RockPaperScissors is Pausable, PullPayment {
         emit LogJoined(gameId, msg.sender);
     }
 
-    function move1(uint256 gameId, bytes32 hashedMove) public exist(gameId) onlyPlayer1(gameId) onlyActive(gameId) {
+    function move1(uint256 gameId, bytes32 hashedMove) public onlyPlayer1(gameId) onlyActive(gameId) {
         require(hashedMove != 0, "Hashed move cannot be empty");
 
         Game storage current = _games[gameId];
@@ -138,7 +138,7 @@ contract RockPaperScissors is Pausable, PullPayment {
         emit LogFirstMoved(gameId, msg.sender, hashedMove);
     }
 
-    function move2(uint256 gameId, Move move) public exist(gameId) onlyActive(gameId) {
+    function move2(uint256 gameId, Move move) public onlyActive(gameId) {
         require(move != Move.None, "Move cannot be empty");
 
         Game storage current = _games[gameId];
@@ -154,7 +154,7 @@ contract RockPaperScissors is Pausable, PullPayment {
         emit LogSecondMoved(gameId, msg.sender, move);
     }
 
-    function reveal(uint256 gameId, Move move, bytes32 secret) public exist(gameId) onlyPlayer1(gameId) onlyActive(gameId) returns (Outcome) {
+    function reveal(uint256 gameId, Move move, bytes32 secret) public onlyPlayer1(gameId) onlyActive(gameId) returns (Outcome) {
         Game storage current = _games[gameId];
 
         require(current.move2 != Move.None, "Reveal should be after second move");
@@ -175,7 +175,7 @@ contract RockPaperScissors is Pausable, PullPayment {
         return outcome;
     }
 
-    function claim(uint256 gameId) public exist(gameId) onlyActive(gameId) returns (Outcome) {
+    function claim(uint256 gameId) public onlyActive(gameId) returns (Outcome) {
         Game storage current = _games[gameId];
 
         require(block.number > current.nextDeadline, "Game still active");
