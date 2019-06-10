@@ -9,7 +9,7 @@ contract RockPaperScissors is Pausable, PullPayment {
     using SafeMath for uint256;
 
     enum Move { None, Rock, Paper, Scissors }
-    enum State { Init, WaitForPlayer, Active, Finished }
+    enum State { Init, WaitForPlayer, Active }
     enum Outcome { None, Win1, Win2, Draw }
 
     event LogStarted(uint256 indexed id, address indexed player1, uint256 stake);
@@ -208,7 +208,7 @@ contract RockPaperScissors is Pausable, PullPayment {
         game.player1 = address(0);
         game.player2 = address(0);
         game.stake = 0;
-        game.state = State.Finished;
+        game.state = State.Init;
         game.deadline = 0;
         game.expirationLimit = 0;
         game.move2 = Move.None;

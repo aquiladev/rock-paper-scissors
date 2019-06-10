@@ -19,8 +19,7 @@ contract('RockPaperScissors', accounts => {
     const states = {
         Init: new BN('0'),
         WaitForPlayer: new BN('1'),
-        Active: new BN('2'),
-        Finished: new BN('3')
+        Active: new BN('2')
     };
 
     let game;
@@ -155,7 +154,7 @@ contract('RockPaperScissors', accounts => {
             const state = await game.getGame(id);
             const expected = {
                 ...initGameState, ...{
-                    state: states.Finished
+                    state: states.Init
                 }
             };
             assertGame(expected, state);
@@ -463,12 +462,7 @@ contract('RockPaperScissors', accounts => {
             balance2.should.be.bignumber.equal(defaultStake);
 
             const state = await game.getGame(id);
-            const expected = {
-                ...initGameState, ...{
-                    state: states.Finished
-                }
-            };
-            assertGame(expected, state);
+            assertGame(initGameState, state);
         })
     });
 
@@ -534,12 +528,7 @@ contract('RockPaperScissors', accounts => {
             });
 
             const state = await game.getGame(id);
-            const expected = {
-                ...initGameState, ...{
-                    state: states.Finished
-                }
-            };
-            assertGame(expected, state);
+            assertGame(initGameState, state);
         })
     });
 });
