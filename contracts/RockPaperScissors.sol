@@ -28,8 +28,8 @@ contract RockPaperScissors is Pausable, PullPayment {
         Move move2;
         Move move1;
         uint256 stake;
-        uint256 stepDuration;
-        uint256 nextDeadline;
+        uint256 deadline;
+        uint256 expirationLimit;
         bytes32 hashedMove1;
     }
 
@@ -61,8 +61,8 @@ contract RockPaperScissors is Pausable, PullPayment {
         State state,
         Move move1,
         Move move2,
-        uint256 stepDuration,
-        uint256 nextDeadline,
+        uint256 deadline,
+        uint256 expirationLimit,
         bytes32 hashedMove1) {
         Game storage game = _games[gameId];
 
@@ -72,8 +72,8 @@ contract RockPaperScissors is Pausable, PullPayment {
         state = game.state;
         move1 = game.move1;
         move2 = game.move2;
-        stepDuration = game.stepDuration;
-        nextDeadline = game.nextDeadline;
+        deadline = game.deadline;
+        expirationLimit = game.expirationLimit;
         hashedMove1 = game.hashedMove1;
     }
 
@@ -82,15 +82,15 @@ contract RockPaperScissors is Pausable, PullPayment {
         return keccak256(abi.encodePacked(address(this), gameId, move, secret));
     }
 
-    function start(uint256 maxStepDuration) public payable returns(uint256 gameId) {
-        require(maxStepDuration > 0, "Step duration cannot be zero");
+    function start(uint256 maxDeadline) public payable returns(uint256 gameId) {
+        require(maxDeadline > 0, "Deadline cannot be zero");
 
         Game storage current = _games[_gameIndex];
         current.player1 = msg.sender;
         current.state = State.WaitForPlayer;
         current.stake = msg.value;
-        current.stepDuration = maxStepDuration;
-        current.nextDeadline = block.number.add(maxStepDuration);
+        current.deadline = maxDeadline;
+        current.expirationLimit = block.number.add(maxDeadline);
 
         gameId = _gameIndex;
         _gameIndex += 1;
@@ -114,12 +114,12 @@ contract RockPaperScissors is Pausable, PullPayment {
         require(msg.sender != current.player1, "You can't play with yourself");
         require(msg.value == current.stake, "Stake should be equal");
         require(current.state == State.WaitForPlayer, "Not possible to join the game");
-        require(block.number <= current.nextDeadline, "Join deadline reached");
+        require(block.number <= current.expirationLimit, "Join deadline reached");
 
         current.player2 = msg.sender;
         current.state = State.Active;
         current.stake = current.stake.add(msg.value);
-        current.nextDeadline = block.number.add(current.stepDuration);
+        current.expirationLimit = block.number.add(current.deadline);
 
         emit LogJoined(gameId, msg.sender);
     }
@@ -130,10 +130,10 @@ contract RockPaperScissors is Pausable, PullPayment {
         Game storage current = _games[gameId];
 
         require(current.hashedMove1 == 0, "Cannot move twice");
-        require(block.number <= current.nextDeadline, "First move deadline reached");
+        require(block.number <= current.expirationLimit, "First move deadline reached");
 
         current.hashedMove1 = hashedMove;
-        current.nextDeadline = block.number.add(current.stepDuration);
+        current.expirationLimit = block.number.add(current.deadline);
 
         emit LogFirstMoved(gameId, msg.sender, hashedMove);
     }
@@ -146,10 +146,10 @@ contract RockPaperScissors is Pausable, PullPayment {
         require(msg.sender == current.player2, "Only player2 can execute");
         require(current.hashedMove1 != 0, "Second move should be after first");
         require(current.move2 == Move.None, "Cannot move twice");
-        require(block.number <= current.nextDeadline, "Second move deadline reached");
+        require(block.number <= current.expirationLimit, "Second move deadline reached");
 
         current.move2 = move;
-        current.nextDeadline = block.number.add(current.stepDuration);
+        current.expirationLimit = block.number.add(current.deadline);
 
         emit LogSecondMoved(gameId, msg.sender, move);
     }
@@ -159,7 +159,7 @@ contract RockPaperScissors is Pausable, PullPayment {
 
         require(current.move2 != Move.None, "Reveal should be after second move");
         require(current.move1 == Move.None, "Cannot reveal twice");
-        require(block.number <= current.nextDeadline, "Reveal deadline reached");
+        require(block.number <= current.expirationLimit, "Reveal deadline reached");
         require(generateMoveHash(gameId, move, secret) == current.hashedMove1, "Move does not match");
 
         current.move1 = move;
@@ -178,7 +178,7 @@ contract RockPaperScissors is Pausable, PullPayment {
     function claim(uint256 gameId) public onlyActive(gameId) returns (Outcome) {
         Game storage current = _games[gameId];
 
-        require(block.number > current.nextDeadline, "Game still active");
+        require(block.number > current.expirationLimit, "Game still active");
 
         Outcome outcome;
 
@@ -209,8 +209,8 @@ contract RockPaperScissors is Pausable, PullPayment {
         game.player2 = address(0);
         game.stake = 0;
         game.state = State.Finished;
-        game.stepDuration = 0;
-        game.nextDeadline = 0;
+        game.deadline = 0;
+        game.expirationLimit = 0;
         game.move2 = Move.None;
         game.move1 = Move.None;
         game.hashedMove1 = 0;

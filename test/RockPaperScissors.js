@@ -71,7 +71,7 @@ contract('RockPaperScissors', accounts => {
 
     describe('start', () => {
         it('revert when step duration is zero', async () => {
-            await expectRevert(game.start(0, { value: 0, from: accounts[0] }), 'Step duration cannot be zero');
+            await expectRevert(game.start(0, { value: 0, from: accounts[0] }), 'Deadline cannot be zero');
         })
 
         it('reverts when step duration overflows', async ()=> {
